@@ -1,0 +1,9 @@
+test_clock_survives_two_frames_and_59_byte_packets (test_pixel_format.PixelFormatTests.test_clock_survives_two_frames_and_59_byte_packets) ... ok
+test_every_gray_pair_matches_vendor_conversion (test_pixel_format.PixelFormatTests.test_every_gray_pair_matches_vendor_conversion) ... ok
+test_known_asymmetric_pairs_and_row_order (test_pixel_format.PixelFormatTests.test_known_asymmetric_pairs_and_row_order) ... ok
+test_odd_aligned_bitmap_text_survives_device_decode (test_pixel_format.PixelFormatTests.test_odd_aligned_bitmap_text_survives_device_decode) ... ok
+
+----------------------------------------------------------------------
+Ran 4 tests in 0.054s
+
+OK

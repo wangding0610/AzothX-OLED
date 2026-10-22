@@ -1,0 +1,41 @@
+test_clock_survives_two_frames_and_59_byte_packets (test_pixel_format.PixelFormatTests.test_clock_survives_two_frames_and_59_byte_packets) ... FAIL
+test_every_gray_pair_matches_vendor_conversion (test_pixel_format.PixelFormatTests.test_every_gray_pair_matches_vendor_conversion) ... FAIL
+test_known_asymmetric_pairs_and_row_order (test_pixel_format.PixelFormatTests.test_known_asymmetric_pairs_and_row_order) ... FAIL
+test_odd_aligned_bitmap_text_survives_device_decode (test_pixel_format.PixelFormatTests.test_odd_aligned_bitmap_text_survives_device_decode) ... FAIL
+
+======================================================================
+FAIL: test_clock_survives_two_frames_and_59_byte_packets (test_pixel_format.PixelFormatTests.test_clock_survives_two_frames_and_59_byte_packets)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "E:\AzothX-OLED\tests\test_pixel_format.py", line 71, in test_clock_survives_two_frames_and_59_byte_packets
+    self.assertEqual(decoded.tobytes(), quantized.tobytes())
+AssertionError: b'\x0[5040 chars]0\x00\xaaU\xff\xff\xff\xff\xaa\xaa\x00U\x00\x0[46208 chars]\x00' != b'\x0[5040 chars]0\x00U\xaa\xff\xff\xff\xff\xaa\xaaU\x00\x00\x0[46208 chars]\x00'
+
+======================================================================
+FAIL: test_every_gray_pair_matches_vendor_conversion (test_pixel_format.PixelFormatTests.test_every_gray_pair_matches_vendor_conversion)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "E:\AzothX-OLED\tests\test_pixel_format.py", line 40, in test_every_gray_pair_matches_vendor_conversion
+    self.assertEqual(oled.render_4bpp(image, 512, 256), bytes(expected))
+AssertionError: b'\x0[58 chars]x00\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x0[188049 chars]\xff' != b'\x0[58 chars]x00\x10\x10\x10\x10\x10\x10\x10\x10\x10\x10\x1[188049 chars]\xff'
+
+======================================================================
+FAIL: test_known_asymmetric_pairs_and_row_order (test_pixel_format.PixelFormatTests.test_known_asymmetric_pairs_and_row_order)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "E:\AzothX-OLED\tests\test_pixel_format.py", line 29, in test_known_asymmetric_pairs_and_row_order
+    self.assertEqual(oled.render_4bpp(image, 4, 2), bytes.fromhex("0f f0 e1 48"))
+AssertionError: b'\xf0\x0f\x1e\x84' != b'\x0f\xf0\xe1H'
+
+======================================================================
+FAIL: test_odd_aligned_bitmap_text_survives_device_decode (test_pixel_format.PixelFormatTests.test_odd_aligned_bitmap_text_survives_device_decode)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "E:\AzothX-OLED\tests\test_pixel_format.py", line 46, in test_odd_aligned_bitmap_text_survives_device_decode
+    self.assertEqual(panel_decode(wire, image.size).tobytes(), image.tobytes())
+AssertionError: b'\x0[21394 chars]x00\xff\x00\x00\xff\x00\x00\x00\x00\x00\x00\xf[31801 chars]\x00' != b'\x0[21394 chars]x00\x00\xff\xff\x00\x00\x00\x00\x00\x00\x00\x0[31801 chars]\x00'
+
+----------------------------------------------------------------------
+Ran 4 tests in 0.055s
+
+FAILED (failures=4)

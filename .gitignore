@@ -1,0 +1,40 @@
+# Local Python environments and generated files
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+*.log
+.env
+.env.*
+*.pem
+*.key
+preview*.png
+/tools/*.png
+
+# Local reverse-engineering materials and historical handoffs
+/decompiled/
+/vendor/
+/scratch/
+/HANDOFF.md
+/TAKEOVER.md
+/docs/REPORT.md
+
+# Only publish reproducible font-fix evidence, not raw dumps or device photos
+/evidence/*
+!/evidence/font-fix/
+/evidence/font-fix/*
+!/evidence/font-fix/pixel-order-comparison.png
+!/evidence/font-fix/after-5x.png
+!/evidence/font-fix/test-before.txt
+!/evidence/font-fix/test-after.txt
+!/evidence/font-fix/hardware-upload-retry.txt
+!/evidence/font-fix/generate_comparison.py
+!/evidence/font-fix/before-source/
+/evidence/font-fix/before-source/*
+!/evidence/font-fix/before-source/tools/
+/evidence/font-fix/before-source/tools/*
+!/evidence/font-fix/before-source/tools/oled.py
+!/evidence/font-fix/before-source/tools/pages.py
+!/evidence/font-fix/before-source/tools/show.py
+!/evidence/font-fix/before-source/tools/push_pixel.py
