@@ -2,7 +2,7 @@
 
 > 后续更新：本教程记录字体像素顺序的修复。默认北京时钟现已使用单帧实时位图加重绘触发，保留秒数并解决刷新闪黑；新的更新流程见 [自定义时钟闪黑修复](docs/BLACK_SCREEN_FIX.md)。下文双帧、226 包描述的是当时验证字体的动画上传路径。
 
-日期：2026-10-22。适用项目：`AzothX-OLED`。文中的 `E:\AzothX-OLED` 是本次工作目录；克隆到其他位置时，请替换为实际路径。
+日期：2026-10-22。适用项目：`AzothX-OLED`。下方命令均从克隆后的仓库根目录执行。
 
 **这次显示变清楚的关键，是纠正了相邻两个像素的存储顺序。** 原来的程序把左、右像素写反了，文字笔画因此出现梳齿和断裂。修正顺序后，再把默认文字改成硬边显示，得到当前效果。
 
@@ -179,7 +179,6 @@ right_preview = right * 17
 在 PowerShell 中执行：
 
 ```powershell
-cd E:\AzothX-OLED
 python -m unittest discover -s tests -v
 ```
 
@@ -201,8 +200,7 @@ ACK 是设备收到命令后返回的确认消息。
 先按一下键盘，让设备醒来，并确认处于 2.4G 模式。然后执行：
 
 ```powershell
-cd E:\AzothX-OLED\tools
-python show.py clock --once
+python tools/show.py clock --once
 ```
 
 本次时钟采用原有双帧格式，两帧内容相同：
@@ -237,8 +235,7 @@ python show.py clock --once
 只生成预览，不上传：
 
 ```powershell
-cd E:\AzothX-OLED\tools
-python show.py clock --preview
+python tools/show.py clock --preview
 ```
 
 预览保存在当前目录的 `preview.png`。它是编码前的画面；排查像素顺序时，还要结合上面的解码检查。
@@ -246,8 +243,7 @@ python show.py clock --preview
 持续更新时间：
 
 ```powershell
-cd E:\AzothX-OLED\tools
-python show.py clock
+python tools/show.py clock
 ```
 
 按 `Ctrl+C` 停止更新。持续上传不能保证唤醒或阻止键盘固件息屏。
@@ -255,7 +251,6 @@ python show.py clock
 复现教程中的对比图：
 
 ```powershell
-cd E:\AzothX-OLED
 python evidence\font-fix\generate_comparison.py
 ```
 
@@ -275,7 +270,7 @@ python evidence\font-fix\generate_comparison.py
 ## 8. 证据与备份
 
 - [简版修复记录](docs/FONT_FIX.md)
-- 修改前源文件：`E:\AzothX-OLED\evidence\font-fix\before-source\`
+- 修改前源文件：`evidence/font-fix/before-source/`
 - [修改前测试输出](evidence/font-fix/test-before.txt)
 - [修改后测试输出](evidence/font-fix/test-after.txt)
 - [成功上传记录](evidence/font-fix/hardware-upload-retry.txt)

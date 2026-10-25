@@ -6,7 +6,7 @@
 
 ![北京时钟放大预览](beijing-clock-preview.png)
 
-这是 208×64 画面按设备像素格式解码后的放大预览，不是实物照片。预览数字是制作预览时的时间，键盘运行时会持续更新。
+这是 208×64 画面按设备像素格式解码后的放大预览，不是实物照片。预览使用固定的虚构示例时间，键盘运行时会显示实际北京时间。可在仓库根目录运行 `python tools/generate_doc_previews.py` 重新生成预览。
 
 ## 布局
 
@@ -29,24 +29,22 @@
 
 重复启动会复用已有任务；管理进程还持有文件锁，防止同时运行两个后台实例。停止前会检查保存的进程编号和命令行，避免终止其他 Python 程序。任务仅使用当前用户的普通权限，不保存密码。
 
-需要在前台调试时，先双击停止入口，再运行以下命令；按 `Ctrl+C` 停止：
+以下命令均从仓库根目录执行。需要在前台调试时，先双击停止入口，再运行以下命令；按 `Ctrl+C` 停止：
 
 ```powershell
-cd E:\AzothX-OLED\tools
-python show.py clock
+python tools/show.py clock
 ```
 
 只显示一次或只保存预览：
 
 ```powershell
-python show.py clock --once
-python show.py clock --preview
+python tools/show.py clock --once
+python tools/show.py clock --preview
 ```
 
 查看后台状态：
 
 ```powershell
-cd E:\AzothX-OLED
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools\clock_control.ps1 -Action status
 ```
 
@@ -56,7 +54,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools\clock_control.ps1 
 
 ## 旧布局再次出现的处理
 
-2026-10-23（America/Chicago）排查时，北京布局的源文件没有改变，但原来的后台进程已经消失，PID 文件仍保留旧编号。Windows 没有在此期间重启。用户看到的是顶部带 `TAIPEI` 的旧画面，符合实时更新停止后，设备恢复之前保存画面的情况。旧日志没有退出原因，不能据此确认是谁结束了进程。
+2026-10-23 排查时，北京布局的源文件没有改变，但原来的后台进程已经消失，PID 文件仍保留旧编号。Windows 没有在此期间重启。用户看到的是顶部带 `TAIPEI` 的旧画面，符合实时更新停止后，设备恢复之前保存画面的情况。旧日志没有退出原因，不能据此确认是谁结束了进程。
 
 此次修复将后台交给 Windows 计划任务，并加入上述退出重启和登录启动。实际结束一次 Python 时钟进程后，约 3 秒成功产生新进程；重复启动没有产生额外时钟；停止入口能禁用任务并保持停止。证据保存在本机 `evidence/clock-recovery/`。
 
@@ -72,7 +70,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools\clock_control.ps1 
 
 ### 开机后 2.4G 连接无画面的修复
 
-2026-10-24（America/Chicago）日志显示，开机时程序没有读到配对表，随后输出 `no pairing table (direct keyboard?): assuming rid=2, chunk=60`，并持续出现 `WriteFile: (0x00000001) 函数不正确`。当时 Windows 能识别接收器，也存在笔记本内置的 ASUS N-KEY 接口。旧逻辑会猜测有线模式，并允许任意 ASUS 厂商接口作为候选；失败后仍在同一连接上重试。
+2026-10-24 日志显示，开机时程序没有读到配对表，随后输出 `no pairing table (direct keyboard?): assuming rid=2, chunk=60`，并持续出现 `WriteFile: (0x00000001) 函数不正确`。当时 Windows 能识别接收器，也存在笔记本内置的 ASUS N-KEY 接口。旧逻辑会猜测有线模式，并允许任意 ASUS 厂商接口作为候选；失败后仍在同一连接上重试。
 
 此次修复删除了时钟入口的猜测连接方式，并在失败后重新识别设备。后台随后报告 `OMNI 2.4G: ctrl rid=2, chunk=59`，完成实时位图上传。用户确认：“已恢复，秒数正常”。像素格式、北京布局和每秒使用的实时位图重绘流程保持不变。另为后台任务加入每分钟恢复检查，避免仅有时钟子进程而没有管理进程的状态持续存在。日志和检查证据保存在本机 `evidence/receiver-reconnect/`。
 
@@ -93,7 +91,6 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools\clock_control.ps1 
 ## 检查
 
 ```powershell
-cd E:\AzothX-OLED
 python -m unittest discover -s tests -v
 ```
 

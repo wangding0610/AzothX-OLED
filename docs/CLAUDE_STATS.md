@@ -4,7 +4,7 @@
 
 ![Claude 状态预览](claude-stats-preview.png)
 
-这是按设备像素格式解码后的放大预览，数值来自制作时的真实会话。
+这是按设备像素格式解码后的放大预览，全部数值是虚构示例。可在仓库根目录运行 `python tools/generate_doc_previews.py` 重新生成。
 
 ## 切换
 
@@ -30,24 +30,38 @@
 
 ## 数据来源与联网
 
-Claude Code 的状态栏命令改为 `tools/claude_status.py statusline`。它先运行原来的 `~/.claude/statusline.py`，终端显示保持不变；再调用其中的统计函数，把精简快照写到 `.runtime/claude/<会话ID>.json`。快照只含数字、状态和工具名，不含提示词和回复内容。
+Claude Code 的状态栏命令接入 `tools/claude_status.py statusline`。它先运行原来的 `~/.claude/statusline.py`，再调用其中的统计函数，把精简快照写到 `.runtime/claude/<会话ID>.json`。快照包含会话标识、模型名、时间、数字、状态和工具名，不含提示词和回复正文。
 
 状态栏设置了每秒刷新，快照随之每秒更新，相当于心跳。显示后台在 5 秒内看到快照内容变化，就认为该会话在运行。判断使用 Windows 本机时钟观察到的“内容是否变化”，不比较 WSL 和 Windows 的时间，避免睡眠后时钟漂移造成误判。
 
-**这个页面不联网。** 显示后台只读取本机文件，不启动、不查询、也不连接 Claude。Claude 未打开时，显示的是最后一份快照。额度数字来自 Claude Code 正常使用时自己的响应，本功能不会额外发请求。
+**Claude 显示后台只读本机文件。** 它不启动、不查询、也不连接 Claude；Claude 未打开时显示最后一份快照。适配器自身没有网络请求代码，但会执行用户提供的原状态栏，不能保证任意第三方状态栏都不联网。当前适配的额度来自 Claude Code 正常使用时的响应。
 
 “等待确认/回答”由两个钩子标记：`Notification`（`permission_prompt`）和 `PreToolUse`（`AskUserQuestion`）运行 `claude_status.py waiting permission|question`。会话记录出现新进展（工具结果、完成或中断）后，标记自动清除。
 
-## 本机配置
+## 接入条件与配置
 
-`~/.claude/settings.json` 的改动：
+当前适配的是 **WSL 中的自定义 Python 状态栏**，不是任意 Claude Code 状态栏的通用读取器。原始 `~/.claude/statusline.py` 和个人 `settings.json` 均不随仓库分发。Windows 原生 Claude Code 尚未验证。
 
-- `statusLine.command`：项目脚本存在时运行 `claude_status.py statusline`，否则回退到原来的 `python3 ~/.claude/statusline.py`。E 盘不可用时终端状态栏照常显示。
-- 两个已有钩子组各追加一条 `waiting` 命令，原来的提醒命令不变。
+原状态栏需要提供这些函数，完整字段对应关系见 [`tools/claude_status.py`](../tools/claude_status.py)：
 
-修改前的备份是 `~/.claude/settings.json.bak-oled-20261025`。撤销时恢复这份备份即可。目前只配置了 WSL 里的 Claude Code；Windows 原生 Claude Code 没有状态栏配置，不在显示范围内。
+| 函数 | 用途 |
+|---|---|
+| `main()` | 从标准输入读取状态栏 JSON，并输出原终端状态栏 |
+| `cached_summary(transcript_path)` | 返回轮数、步数、速度、tokens、状态及时间等摘要 |
+| `remembered_limits(rate_limits)` | 返回 `five_hour` / `seven_day` 用量及重置时间 |
+| `compact_window(model_id)` | 返回模型自动压缩上下文的窗口大小 |
 
-快照保存在 `.runtime/claude/`，不进 Git，超过 7 天的会话文件会自动清理。
+缺少这些接口时，不能保证完整统计和原终端状态栏正常显示，需要先适配自己的脚本。可以通过环境变量 `OLED_CLAUDE_STATUSLINE` 指定兼容脚本的位置。
+
+接入步骤：
+
+1. 备份自己的 `~/.claude/settings.json`，记录原状态栏命令。
+2. 将状态栏命令接到 `python3 /path/to/AzothX-OLED/tools/claude_status.py statusline`。把 `/path/to/AzothX-OLED` 替换为 WSL 可访问的实际仓库路径；Windows 显示后台必须读取同一份仓库中的 `.runtime/`。
+3. 确保状态栏约每秒刷新。显示后台在快照持续 5 秒没有变化时会判为离线，因此仅在新消息到达时刷新的配置不适用。
+4. 如需等待提醒，在现有 `Notification` 的 `permission_prompt` 钩子中追加 `python3 /path/to/AzothX-OLED/tools/claude_status.py waiting permission`，在 `PreToolUse` 的 `AskUserQuestion` 钩子中追加 `python3 /path/to/AzothX-OLED/tools/claude_status.py waiting question`。保留原有钩子。
+5. 启动 Claude Code 并确认原终端状态栏正常，再双击 `启动Claude统计.vbs` 查看小屏。
+
+可以在状态栏命令中加入脚本不存在时回退原命令的判断。撤销接入时恢复自己的设置备份。快照保存在 `.runtime/claude/`，不进 Git，超过 7 天的会话文件会在后续导出时清理。
 
 ## 可选：等待时自动跳转
 

@@ -27,10 +27,9 @@
 
 ## 验证
 
-运行：
+在仓库根目录运行：
 
 ```powershell
-cd E:\AzothX-OLED
 python -m unittest discover -s tests -v
 ```
 
@@ -58,13 +57,13 @@ python -m unittest discover -s tests -v
 显示一次：
 
 ```powershell
-python E:\AzothX-OLED\tools\show.py clock --once
+python tools/show.py clock --once
 ```
 
 持续更新时间：
 
 ```powershell
-python E:\AzothX-OLED\tools\show.py clock
+python tools/show.py clock
 ```
 
 按 `Ctrl+C` 停止持续更新。运行前确保键盘已唤醒并处于 2.4G 模式；上传不会代替物理按键唤醒。

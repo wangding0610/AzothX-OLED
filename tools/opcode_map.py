@@ -1,7 +1,9 @@
 """Map every `array[1] = NN;` (command opcode) to its enclosing class in KBApi source."""
+from pathlib import Path
 import re
 
-SRC = r"E:\RAE\scratch\azoth-oled\kbapi_src\GearLink_KBApi.decompiled.cs"
+# Supply this file locally; vendor sources are not distributed with the repo.
+SRC = Path(__file__).resolve().parents[1] / "decompiled" / "GearLink_KBApi.decompiled.cs"
 lines = open(SRC, encoding="utf-8").read().splitlines()
 
 cur = "?"

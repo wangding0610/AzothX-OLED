@@ -8,7 +8,8 @@ from unittest.mock import Mock, patch
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "tools"))
 import codex_stats
 
-THREAD = "01a1641e-4c0f-7ab0-9024-b9576129981a"
+# Synthetic identifiers; never copy IDs from real chats into test fixtures.
+THREAD = "00000000-0000-4000-8000-000000000001"
 OTHER = "11111111-2222-3333-4444-555555555555"
 
 

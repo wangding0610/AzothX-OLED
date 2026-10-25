@@ -18,6 +18,7 @@
 | `push.py` / `push_pixel.py` | 自定义文字 |
 | `name.py` | 固定示例名字卡 |
 | `make_sheet.py` | 在本地生成页面预览 |
+| `generate_doc_previews.py` | 用固定虚构数据生成三张公开预览，并校验像素编码；不读取真实会话或访问键盘 |
 | `pair_info.py` / `find_channel.py` / `hid_scan.py` / `link_check.py` | 设备与通道诊断，输出可能包含本机设备标识 |
 | `strings_dump.py` / `scan_strings.py` | 分析用户自行提供的本地文件 |
 
