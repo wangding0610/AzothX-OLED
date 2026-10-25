@@ -14,8 +14,9 @@ Transport facts
   The dongle answers every write on a device channel with "FF AA" while the
   paired device is off / asleep / not linked.
 
-  A directly attached keyboard uses the same command block in a 65 byte report
-  (report id + 64 bytes), so the data chunk is 60 bytes instead of 59.
+  Direct Azoth X USB (PID 1C24) writes a 65-byte buffer beginning with report ID
+  0 and uses 60-byte chunks. hidapi reads its unnumbered 64-byte input without
+  that ID; the receive path prepends 0 to share the OMNI packet parser.
 
 Command block (byte 0 is the HID report id)
   custom animation, cmd 0x61:
@@ -61,11 +62,20 @@ import hid
 
 VID = 0x0B05
 OMNI_PID = 0x1ACE
+AZOTH_X_PID = 0x1C25
+AZOTH_X_USB_PID = 0x1C24
 
 CMD_ANIMATION = 0x61
 CMD_BANNER = 0x62
+CMD_LIVE_BITMAP = 0x67
 SUB_ANIM_MODE, SUB_ANIM_DATA, SUB_ANIM_SHOW = 1, 2, 3
 SUB_BANNER_MODE, SUB_BANNER_DATA, SUB_BANNER_SHOW = 0, 1, 2
+SUB_LIVE_MODE, SUB_LIVE_DATA, SUB_LIVE_REDRAW = 0, 1, 2
+
+# Tested on Azoth X via OMNI: another upload 0.1s after show was rejected
+# mid-frame (FF AA); a 2s idle period succeeded. Keep this in the transport so
+# callers cannot accidentally flood the receiver with back-to-back animations.
+ANIMATION_COOLDOWN = 2.0
 
 
 # --------------------------------------------------------------------- discovery
@@ -77,34 +87,80 @@ def enumerate_vendor():
     return out
 
 
-def dongle_pairing():
+def dongle_pairing(devices=None):
     """Ask the OMNI receiver what is paired: returns dict or None."""
-    for d in hid.enumerate(VID, OMNI_PID):
+    if devices is None:
+        devices = hid.enumerate(VID, OMNI_PID)
+    for d in devices:
         if d["usage_page"] != 0xFF02:
             continue
         dev = hid.device()
-        dev.open_path(d["path"])
-        dev.set_nonblocking(0)
-        buf = bytearray(64)
-        buf[0] = 1
-        buf[1] = 0xA0
-        buf[2] = 0x00
-        dev.write(bytes(buf))
-        end = time.time() + 2.0
-        while time.time() < end:
-            data = dev.read(64, 200)
-            if data and data[1] == 0xA0:
-                b = bytes(data)
-                info = {
-                    "paired_pid": int.from_bytes(b[5:7], "little"),
-                    "ctrl_report_id": b[7],
-                    "notify_report_id": b[8],
-                    "path_management": d["path"],
-                }
-                dev.close()
-                return info
-        dev.close()
+        try:
+            dev.open_path(d["path"])
+            dev.set_nonblocking(0)
+            buf = bytearray(64)
+            buf[0] = 1
+            buf[1] = 0xA0
+            buf[2] = 0x00
+            if dev.write(bytes(buf)) < 0:
+                raise OSError(f"OMNI pairing query failed: {dev.error()}")
+            end = time.monotonic() + 2.0
+            while time.monotonic() < end:
+                data = dev.read(64, 200)
+                if data and len(data) >= 9 and data[1] == 0xA0 and data[2] == 0:
+                    b = bytes(data)
+                    return {
+                        "paired_pid": int.from_bytes(b[5:7], "little"),
+                        "ctrl_report_id": b[7],
+                        "notify_report_id": b[8],
+                        "path_management": d["path"],
+                        "serial_number": d.get("serial_number", ""),
+                    }
+        finally:
+            dev.close()
     return None
+
+
+def clock_connections():
+    """Verified USB and OMNI candidates; the caller checks which one responds."""
+    devices = hid.enumerate(VID, 0)
+    targets = []
+    direct = [d for d in devices
+              if d["product_id"] == AZOTH_X_USB_PID and d["usage_page"] == 0xFF00]
+    if len(direct) == 1:
+        targets.append({"path": direct[0]["path"], "report_id": 0, "chunk": 60,
+                        "transport": "Azoth X USB", "usage_page": 0xFF00})
+    issue = "Azoth X OLED not found; waiting for the OMNI receiver or keyboard USB"
+    receivers = [d for d in devices if d["product_id"] == OMNI_PID]
+    if receivers:
+        try:
+            pairing = dongle_pairing(receivers)
+            if pairing is None:
+                raise OSError("OMNI receiver is not ready; waiting for its pairing table")
+            if pairing["paired_pid"] != AZOTH_X_PID:
+                raise OSError(f"OMNI paired device is not Azoth X: 0x{pairing['paired_pid']:04X}")
+            rid = pairing["ctrl_report_id"]
+            if rid not in (2, 3):
+                raise OSError(f"OMNI returned an invalid control report ID: {rid}")
+            usage_page = 0xFF00 + rid - 2
+            controls = [d for d in receivers if d["usage_page"] == usage_page]
+            serial = pairing.get("serial_number")
+            if serial:
+                controls = [d for d in controls if d.get("serial_number") == serial]
+            if len(controls) != 1:
+                raise OSError("OMNI keyboard control interface is missing or ambiguous")
+            targets.append({"path": controls[0]["path"], "report_id": rid, "chunk": 59,
+                            "transport": "OMNI 2.4G", "usage_page": usage_page})
+        except OSError as exc:
+            issue = str(exc)
+    if not targets:
+        raise OSError(issue)
+    return targets
+
+
+def clock_connection():
+    """Compatibility discovery helper; use clock_connections to try both links."""
+    return clock_connections()[0]
 
 
 def pick_ctrl(report_id: int, usage_page: int = 0xFF00):
@@ -135,9 +191,14 @@ class RogOled:
         self.chunk = chunk
         self.verbose = verbose
         self.dev = hid.device()
-        self.dev.open_path(info["path"])
-        self.dev.set_nonblocking(0)
+        try:
+            self.dev.open_path(info["path"])
+            self.dev.set_nonblocking(0)
+        except Exception:
+            self.dev.close()
+            raise
         self.rx: "queue.Queue[bytes]" = queue.Queue()
+        self._read_error = None
         self._stop = threading.Event()
         self._t = threading.Thread(target=self._reader, daemon=True)
         self._t.start()
@@ -145,28 +206,25 @@ class RogOled:
         self._link_checked = False
 
     def _reader(self):
-        errs = 0
         while not self._stop.is_set():
             try:
                 data = self.dev.read(64, 200)
-                errs = 0
-            except Exception:
-                errs += 1
-                if errs in (10, 100):          # handle went stale: reopen quietly
-                    try:
-                        self.dev.close()
-                        self.dev = hid.device()
-                        self.dev.open_path(self.info["path"])
-                        self.dev.set_nonblocking(0)
-                    except Exception:
-                        pass
-                time.sleep(0.02)
-                continue
+            except Exception as exc:
+                # The caller must rediscover the receiver after replug/resume.
+                # Reopening this same path can retain a stale or wrong device.
+                self._read_error = str(exc)
+                return
             if data:
-                self.rx.put(bytes(data))
+                # USB 1C24 uses unnumbered input reports: hidapi returns the
+                # 64-byte command starting with 0x67, without the output's 0 ID.
+                # Normalize to the same indexing as numbered OMNI reports.
+                prefix = b"\0" if self.report_id == 0 else b""
+                self.rx.put(prefix + bytes(data))
 
     def close(self):
         self._stop.set()
+        # read() has a 200 ms timeout; let it finish before closing its handle.
+        self._t.join(timeout=1.0)
         try:
             self.dev.close()
         except Exception:
@@ -174,6 +232,8 @@ class RogOled:
 
     # -------------------------------------------------------------- primitives
     def write(self, buf: bytearray):
+        if self._read_error is not None:
+            raise OSError(f"HID connection lost: {self._read_error}")
         buf[0] = self.report_id
         n = self.dev.write(bytes(buf))
         if n < 0:
@@ -189,7 +249,7 @@ class RogOled:
             except queue.Empty:
                 return
 
-    def wait_for(self, cmd, sub, timeout=2.0):
+    def wait_for(self, cmd, sub, timeout=2.0, index=None):
         end = time.time() + timeout
         while time.time() < end:
             try:
@@ -197,6 +257,8 @@ class RogOled:
             except queue.Empty:
                 return None
             if len(b) > 2 and b[1] == cmd and b[2] == sub:
+                if index is not None and (len(b) < 5 or int.from_bytes(b[3:5], "little") != index):
+                    continue  # Ignore a late echo for an earlier packet.
                 return b
         return None
 
@@ -225,7 +287,51 @@ class RogOled:
             time.sleep(1.0)
 
     # ------------------------------------------------------------------ commands
+    def configure_live(self, width, height):
+        """Select bitmap-only output and require an ACK from this connection."""
+        if width <= 0 or height <= 0 or width % 2:
+            raise ValueError("live bitmap requires positive dimensions and even width")
+        total = (width * height // 2 + self.chunk - 1) // self.chunk
+        self.drain()
+        buf = bytearray(65)
+        buf[1], buf[2] = CMD_LIVE_BITMAP, SUB_LIVE_MODE
+        buf[5], buf[6] = 0, 0  # ONLY_MUSIC_INFO, spectrum style NONE
+        buf[7:9] = total.to_bytes(2, "little")
+        buf[9:11] = width.to_bytes(2, "little")
+        buf[11:13] = height.to_bytes(2, "little")
+        self.write(buf)
+        if not self.wait_for(CMD_LIVE_BITMAP, SUB_LIVE_MODE):
+            raise IOError("no ACK for live bitmap mode")
+        return total
+
+    def live_upload(self, payload, width, height):
+        """Upload one fixed bitmap, then send the required all-zero redraw.
+
+        The redraw has no ACK in the vendor SetSpectrumData implementation.
+        Mode/data ACKs alone leave the previous clock visible.
+        """
+        if width <= 0 or height <= 0 or width % 2 or len(payload) != width * height // 2:
+            raise ValueError("live bitmap must be one complete even-width 4bpp frame")
+        total = self.configure_live(width, height)
+        print(f"[live] {width}x{height}, {len(payload)} bytes -> {total} packets")
+        self._send_chunks(CMD_LIVE_BITMAP, SUB_LIVE_DATA, payload, total)
+        buf = bytearray(65)
+        buf[1], buf[2] = CMD_LIVE_BITMAP, SUB_LIVE_REDRAW
+        self.write(buf)
+        print("[ok] live bitmap uploaded; redraw triggered")
+
     def animation_upload(self, payload):
+        remaining = getattr(self, "_animation_ready_at", 0.0) - time.monotonic()
+        if remaining > 0:
+            time.sleep(remaining)
+        try:
+            self._animation_upload_once(payload)
+        finally:
+            # Also back off after a failed upload; the next call starts at mode
+            # and sends every chunk again instead of resuming a reset session.
+            self._animation_ready_at = time.monotonic() + ANIMATION_COOLDOWN
+
+    def _animation_upload_once(self, payload):
         total = (len(payload) + self.chunk - 1) // self.chunk
         print(f"[anim] {len(payload)} bytes -> {total} packets of {self.chunk}")
 
@@ -235,7 +341,7 @@ class RogOled:
         buf[5:9] = total.to_bytes(4, "little")
         self.write(buf)
         if not self.wait_for(CMD_ANIMATION, SUB_ANIM_MODE):
-            print("  !! no ACK for animation mode")
+            raise IOError("no ACK for animation mode")
 
         self._send_chunks(CMD_ANIMATION, SUB_ANIM_DATA, payload, total)
 
@@ -243,7 +349,7 @@ class RogOled:
         buf[1], buf[2] = CMD_ANIMATION, SUB_ANIM_SHOW
         self.write(buf)
         if not self.wait_for(CMD_ANIMATION, SUB_ANIM_SHOW):
-            print("  !! no ACK for animation show")
+            raise IOError("no ACK for animation show")
 
     def banner_upload(self, payload, width, height, banner_type=0, direction=0):
         total = (len(payload) + self.chunk - 1) // self.chunk
@@ -276,39 +382,20 @@ class RogOled:
             chunk = payload[i * self.chunk:(i + 1) * self.chunk]
             if index:
                 index -= 1
-            ok = False
-            for attempt in range(8):
-                if attempt in (3, 6):          # re-sync: firmware sometimes drops the session
-                    self._mode_resend(cmd, sub, payload, total)
-                buf = bytearray(65)
-                buf[1], buf[2] = cmd, sub
-                buf[3:5] = index.to_bytes(2, "little")
-                buf[5:5 + len(chunk)] = chunk
-                self.write(buf)
-                rsp = self.wait_for(cmd, sub)
-                if rsp and rsp[3] == (index & 0xFF) and rsp[4] == (index >> 8):
-                    ok = True
-                    break
-                print(f"  retry packet {i} (attempt {attempt + 1})")
-            if not ok:
+            buf = bytearray(65)
+            buf[1], buf[2] = cmd, sub
+            buf[3:5] = index.to_bytes(2, "little")
+            buf[5:5 + len(chunk)] = chunk
+            self.write(buf)
+            rsp = self.wait_for(cmd, sub, index=index)
+            if not rsp:
+                # Do not reset mode here and continue at i: that discards the
+                # earlier chunks. Let the caller restart the entire frame.
                 raise IOError(f"packet {i} never acknowledged")
             acked += 1
             if i % 20 == 0 or i == total - 1:
                 print(f"  .. {acked}/{total}")
         print(f"[ok] {acked} packets acknowledged")
-
-    def _mode_resend(self, cmd, sub, payload, total):
-        """Re-issue the mode packet (animation only) to rebuild the transfer state."""
-        if cmd != CMD_ANIMATION:
-            return
-        buf = bytearray(65)
-        buf[1], buf[2] = CMD_ANIMATION, SUB_ANIM_MODE
-        buf[5:9] = total.to_bytes(4, "little")
-        self.drain()
-        self.write(buf)
-        self.wait_for(CMD_ANIMATION, SUB_ANIM_MODE)
-
-
 
 # --------------------------------------------------------------------- rendering
 def render_4bpp(img, width, height):

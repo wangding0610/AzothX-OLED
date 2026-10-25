@@ -53,7 +53,7 @@ class PixelFormatTests(unittest.TestCase):
         device.chunk = 59
         device.drain = lambda: None
         device.write = lambda b: reports.append(bytes(b))
-        device.wait_for = lambda cmd, sub: reports[-1]
+        device.wait_for = lambda cmd, sub, **kwargs: reports[-1]
         with contextlib.redirect_stdout(io.StringIO()):
             show.push(device, image)
         self.assertEqual(reports[0][1:3], b"\x61\x01")

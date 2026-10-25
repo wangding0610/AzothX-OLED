@@ -1,6 +1,7 @@
 hidapi>=0.14
 Pillow>=10.0
 psutil>=5.9
+websocket-client>=1.8
 # 可选：让 stats.py 读到温度
 # wmi
 # pywin32

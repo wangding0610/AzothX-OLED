@@ -4,7 +4,14 @@
 
 | 文件 | 用途 |
 |---|---|
-| `show.py` | 时钟、CPU/内存、网速、番茄钟、文字、黑屏 |
+| `show.py` | 北京时钟（UTC+8）、CPU/内存、网速、番茄钟、文字、黑屏 |
+| `clock_control.ps1` | 通过 Windows 计划任务运行北京时钟；登录启动、退出重启、停止和状态查询 |
+| `clock_service.py` | pythonw 无窗口后台；独占锁、时钟子进程管理和日志 |
+| `codex_stats.py` | 读取已安装的输入栏统计插件，跟随当前对话显示四项统计；管理时钟、Codex、Claude 三页切换 |
+| `claude_status.py` | Claude Code 状态栏包装与钩子（WSL 侧写快照），以及显示端只读的会话读取器 |
+| `rocker_switch.py` | 接收拨杆映射的小键盘加减键：上拨时钟，下拨在 Codex 与 Claude 之间轮流 |
+| `clock_silent.vbs` | 根目录启动、停止入口共用的无弹窗启动器 |
+| `clock_start.cmd` / `clock_stop.cmd` | 命令行备用入口；日常双击使用根目录的 `.vbs` |
 | `pages.py` | 208×64 页面绘制 |
 | `oled.py` | HID 通信、像素编码、图片上传、设备枚举 |
 | `pxfont.py` | 5×7 点阵字体 |
